@@ -1,0 +1,61 @@
+import json
+import boto3
+s3_client = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+
+# removes leading zeros
+def strip_zero(dur_str): 
+    new_str = dur_str.lstrip('0')
+    if new_str == '':
+        new_str = '0'
+        
+    return new_str
+    
+
+def duration_conversion(duration):
+    try:
+        duration_list = duration.split(":")
+        reduced_duration = f"{strip_zero(duration_list[0])}:{duration_list[1]}:{duration_list[2]}"
+        print(reduced_duration)
+        return reduced_duration
+    except IndexError:
+        
+        return "Null"
+
+
+def lambda_handler(event, context):
+    print(json.dumps(event))
+    bucket = event["Records"][0]["s3"]["bucket"]["name"]
+    csv_file_name = event["Records"][0]["s3"]["object"]["key"]
+    folder_name = csv_file_name.partition('/')
+    table = dynamodb.Table(f'{folder_name[0]}')
+    csv_object = s3_client.get_object(Bucket=bucket,Key=csv_file_name)
+    file_reader = csv_object["Body"].read().decode("utf-8")
+    issues = file_reader.split("\n")
+    issues = list(filter(None, issues))
+    
+    for issue in issues:
+        issue_data = issue.split(",")
+        table.put_item(Item = {
+            "Unique Issue Number" : issue_data[0],
+            "Date Processed" : issue_data[1],
+            "Date Completed" : issue_data[2],
+            "Issue Detected" : issue_data[3],
+            "Issues Corrected by ROK" : issue_data[4],
+            "Issue type" : issue_data[5],
+            "Age Rating" : issue_data[6],
+            "Age rating at Playout" : issue_data[7],
+            "Licensed or Produced" : issue_data[8],
+            "Working SRT" : issue_data[9],
+            "Working Dialogue track" : issue_data[10],
+            "Working Score track" : issue_data[11],
+            "Audio Quality" : issue_data[12],
+            "Video Quality" : issue_data[13],
+            "Versions Submitted" : issue_data[14],
+            "Start Duration" : duration_conversion(issue_data[15]),
+            "Final Duration" : duration_conversion(issue_data[16])
+            
+        })
+    
+    
+    return "success"
